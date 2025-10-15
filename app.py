@@ -24,25 +24,25 @@ if 'models_loaded' not in st.session_state:
 
 @st.cache_resource
 def load_models():
-    """Load AI models with caching"""
+    """Load AI models with caching - Cloud optimized"""
     try:
-        with st.spinner("🚀 Loading High-Accuracy AI Models..."):
-            # Try advanced models first
-            summarizer = pipeline("summarization", model="facebook/bart-large-cnn", device=-1)
-            qa_pipeline = pipeline("question-answering", model="deepset/roberta-large-squad2", device=-1)
-        st.success("✅ Advanced AI Models Loaded Successfully!")
-        return summarizer, qa_pipeline
-    except Exception as e:
-        st.info(f"🔄 Loading optimized models for cloud deployment...")
-        try:
-            # Use lighter models for cloud deployment
+        with st.spinner("🚀 Loading Cloud-Optimized AI Models..."):
+            # Use lighter models for reliable cloud deployment
             summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6", device=-1)
             qa_pipeline = pipeline("question-answering", model="distilbert-base-cased-distilled-squad", device=-1)
-            st.success("✅ Cloud-Optimized AI Models Loaded Successfully!")
+        st.success("✅ AI Models Loaded Successfully!")
+        return summarizer, qa_pipeline
+    except Exception as e:
+        st.warning(f"⚠️ Trying even lighter models: {e}")
+        try:
+            # Fallback to the most basic models
+            summarizer = pipeline("summarization", model="t5-small", device=-1)
+            qa_pipeline = pipeline("question-answering", model="distilbert-base-uncased-distilled-squad", device=-1)
+            st.info("✅ Basic AI Models Loaded Successfully!")
             return summarizer, qa_pipeline
         except Exception as e2:
             st.error(f"❌ Error loading models: {e2}")
-            # Return None to handle gracefully
+            st.error("Please try refreshing the page or contact support.")
             return None, None
 
 # Load models
