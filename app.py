@@ -1,73 +1,64 @@
-from flask import Flask, render_template, request, jsonify
-import os
-import fitz
+import streamlit as st
+import fitz  # PyMuPDF
 from transformers import pipeline
-from werkzeug.utils import secure_filename
 import tempfile
 import time
+import re
+import os
 
-app = Flask(__name__)
-app.secret_key = 'your-secret-key'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+# Page configuration
+st.set_page_config(
+    page_title="🤖 AI PDF Summarizer + QnA Bot",
+    page_icon="📄",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-print("Loading HIGH-ACCURACY AI models...")
-try:
-    print("- Loading advanced BART-Large for summarization...")
-    summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-    
-    print("- Loading RoBERTa-Large for Q&A (much more accurate)...")
-    qa_pipeline = pipeline("question-answering", model="deepset/roberta-large-squad2")
-    
-    print("SUCCESS: High-accuracy models loaded!")
-except Exception as e:
-    print(f"Loading premium models... Error: {e}")
-    print("- Loading Google T5 for summarization...")
+# Title and description
+st.title("📄 AI-Powered PDF Summarizer + QnA Bot")
+st.markdown("### Upload a PDF or enter text to get intelligent summaries and ask questions!")
+
+# Initialize session state
+if 'models_loaded' not in st.session_state:
+    st.session_state.models_loaded = False
+
+@st.cache_resource
+def load_models():
+    """Load AI models with caching"""
     try:
-        summarizer = pipeline("summarization", model="t5-base")
-    except:
+        with st.spinner("🚀 Loading High-Accuracy AI Models..."):
+            summarizer = pipeline("summarization", model="facebook/bart-large-cnn", device=-1)
+            qa_pipeline = pipeline("question-answering", model="deepset/roberta-large-squad2", device=-1)
+        st.success("✅ Advanced AI Models Loaded Successfully!")
+        return summarizer, qa_pipeline
+    except Exception as e:
+        st.warning(f"⚠️ Using fallback models: {e}")
         summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
-    
-    print("- Loading advanced DistilBERT for Q&A...")
-    qa_pipeline = pipeline("question-answering", model="distilbert-base-cased-distilled-squad")
-print("Models loaded!")
+        qa_pipeline = pipeline("question-answering", model="distilbert-base-cased-distilled-squad")
+        return summarizer, qa_pipeline
 
-ALLOWED_EXTENSIONS = {'pdf', 'txt'}
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+# Load models
+summarizer, qa_pipeline = load_models()
 
 def advanced_text_preprocessing(text):
-    """Enhanced preprocessing for higher accuracy."""
-    import re
-    
-    # Remove noise and artifacts
+    """Enhanced text preprocessing"""
     text = re.sub(r'\s+', ' ', text.strip())
-    text = re.sub(r'[^\w\s\.\,\!\?\;\:\-\(\)]', ' ', text)  # Remove special chars
-    text = re.sub(r'(\w+)([A-Z])', r'\1. \2', text)  # Fix missing periods
-    text = re.sub(r'\b\d+\s*$', '', text, flags=re.MULTILINE)  # Remove page numbers
-    
-    # Fix common OCR errors
-    text = re.sub(r'\bl\b', 'I', text)  # Common OCR mistake
-    text = re.sub(r'\b0\b', 'O', text)  # Zero to O
-    
+    text = re.sub(r'[^\w\s\.\,\!\?\;\:\-\(\)]', ' ', text)
+    text = re.sub(r'(\w+)([A-Z])', r'\1. \2', text)
+    text = re.sub(r'\b\d+\s*$', '', text, flags=re.MULTILINE)
     return text.strip()
 
 def intelligent_chunking(text, max_size=1500):
-    """Smart chunking that preserves context and meaning."""
+    """Smart text chunking with context preservation"""
     text = advanced_text_preprocessing(text)
-    
-    # Split by double newlines first (paragraph boundaries)
     paragraphs = [p.strip() for p in text.split('\n\n') if len(p.strip()) > 20]
     
     chunks = []
     current_chunk = ""
     
     for paragraph in paragraphs:
-        # If adding this paragraph exceeds size, save current chunk
         if len(current_chunk) + len(paragraph) > max_size and current_chunk:
             chunks.append(current_chunk.strip())
-            
-            # Start new chunk with some overlap for context
             sentences = current_chunk.split('.')
             if len(sentences) > 2:
                 overlap = '. '.join(sentences[-2:]) + '. '
@@ -75,233 +66,104 @@ def intelligent_chunking(text, max_size=1500):
             else:
                 current_chunk = paragraph
         else:
-            if current_chunk:
-                current_chunk += "\n\n" + paragraph
-            else:
-                current_chunk = paragraph
+            current_chunk = current_chunk + "\n\n" + paragraph if current_chunk else paragraph
     
-    # Add the last chunk
     if current_chunk:
         chunks.append(current_chunk.strip())
     
     return chunks if chunks else [text]
 
-def calculate_semantic_similarity(question, text):
-    """Calculate how relevant text is to the question."""
-    question_words = set(question.lower().split())
-    text_words = set(text.lower().split())
+def extract_text_from_pdf(pdf_file):
+    """Extract text from uploaded PDF"""
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+        tmp_file.write(pdf_file.read())
+        tmp_file_path = tmp_file.name
     
-    # Basic word overlap
-    common_words = question_words.intersection(text_words)
-    basic_score = len(common_words) / max(len(question_words), 1)
-    
-    # Boost for important question words (what, how, why, when, where)
-    question_type_words = ['what', 'how', 'why', 'when', 'where', 'which', 'who']
-    question_type = [w for w in question_words if w in question_type_words]
-    
-    # Boost for technical terms
-    technical_terms = ['algorithm', 'method', 'approach', 'technique', 'process', 
-                      'system', 'model', 'analysis', 'result', 'conclusion', 'finding']
-    tech_boost = sum(2 for word in common_words if word in technical_terms)
-    
-    return basic_score + tech_boost * 0.1
-
-def find_best_context(chunks, question, max_context_length=2000):
-    """Find the most relevant chunks for the question."""
-    if not chunks:
-        return ""
-    
-    # Score each chunk
-    scored_chunks = []
-    for chunk in chunks:
-        score = calculate_semantic_similarity(question, chunk)
-        scored_chunks.append((chunk, score))
-    
-    # Sort by relevance
-    scored_chunks.sort(key=lambda x: x[1], reverse=True)
-    
-    # Combine top chunks until we reach max length
-    selected_text = ""
-    for chunk, score in scored_chunks:
-        if len(selected_text) + len(chunk) <= max_context_length:
-            selected_text += "\n\n" + chunk if selected_text else chunk
-        else:
-            break
-    
-    return selected_text
-
-def enhance_answer_quality(answer, question, context):
-    """Post-process answers to improve quality and completeness."""
-    original_answer = answer
-    
-    # If answer is too short, try to expand it
-    if len(answer.split()) < 6:
-        sentences = context.split('.')
-        question_keywords = question.lower().split()
-        
-        # Find sentences that contain question keywords
-        relevant_sentences = []
-        for sentence in sentences:
-            sentence = sentence.strip()
-            if len(sentence) < 10:
-                continue
-            
-            # Count keyword matches
-            matches = sum(1 for word in question_keywords if word in sentence.lower())
-            if matches >= 2:  # At least 2 keyword matches
-                relevant_sentences.append((sentence, matches))
-        
-        # Sort by relevance and add the best matches
-        relevant_sentences.sort(key=lambda x: x[1], reverse=True)
-        
-        if relevant_sentences:
-            additional_info = '. '.join([s[0] for s in relevant_sentences[:2]])
-            answer = f"{answer}. {additional_info}"
-    
-    # Clean up the answer
-    answer = answer.strip()
-    if not answer.endswith('.'):
-        answer += '.'
-    
-    return answer
-
-def extract_text_from_pdf(pdf_path):
-    """Enhanced PDF text extraction specifically optimized for resumes and structured documents."""
-    doc = fitz.open(pdf_path)
     try:
+        doc = fitz.open(tmp_file_path)
         full_text = ""
+        
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
-            
-            # Try multiple extraction methods for better quality
-            # Method 1: Standard text extraction
             text_dict = page.get_text("dict")
             page_text = ""
             
             for block in text_dict["blocks"]:
-                if "lines" in block:  # Text block
+                if "lines" in block:
                     for line in block["lines"]:
                         line_text = ""
                         for span in line["spans"]:
                             line_text += span["text"]
                         if line_text.strip():
                             page_text += line_text + "\n"
-                    page_text += "\n"  # Add paragraph break
+                    page_text += "\n"
             
-            # Fallback to simple extraction if structured fails
             if not page_text.strip():
                 page_text = page.get_text()
             
             full_text += page_text
         
+        doc.close()
         return full_text
     finally:
-        doc.close()
+        if os.path.exists(tmp_file_path):
+            os.unlink(tmp_file_path)
 
 def clean_resume_text(text):
-    """Specialized cleaning for resume and professional documents."""
-    import re
-    
-    # Fix common PDF extraction issues
-    text = re.sub(r'[^\x00-\x7F]+', ' ', text)  # Remove non-ASCII characters
-    text = re.sub(r'\s+', ' ', text.strip())  # Normalize whitespace
-    
-    # Fix common resume formatting issues
-    text = re.sub(r'(\w+)\s*[Ó•·]\s*(\d)', r'\1 \2', text)  # Fix bullet points with phones
-    text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)  # Add spaces between joined words
-    text = re.sub(r'(\w)@(\w)', r'\1@\2', text)  # Preserve email addresses
-    text = re.sub(r'(\d{2})-(\d{10})', r'+91-\2', text)  # Fix phone numbers
-    
-    # Common resume section headers
-    sections = ['EDUCATION', 'EXPERIENCE', 'PROJECTS', 'SKILLS', 'CONTACT', 'SUMMARY']
-    for section in sections:
-        # Fix broken section headers
-        text = re.sub(rf'{section}[.]*\s*([A-Z])', rf'{section}\n\1', text)
-    
-    # Fix email formatting
-    text = re.sub(r'(\w+)\s+gmail\s*[.\s]*com', r'\1@gmail.com', text)
-    
-    # Fix common LinkedIn/social formatting
-    text = re.sub(r'([Ll]inkedin|[Gg]ithub)\s*[:\s]*([a-zA-Z0-9_-]+)', r'\1: \2', text)
-    
+    """Clean resume-specific text artifacts"""
+    text = re.sub(r'[^\x00-\x7F]+', ' ', text)
+    text = re.sub(r'\s+', ' ', text.strip())
+    text = re.sub(r'(\w+)\s*[Ó•·]\s*(\d)', r'\1 \2', text)
+    text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
+    text = re.sub(r'(\w)@(\w)', r'\1@\2', text)
     return text.strip()
 
 def format_resume_summary(text, summary):
-    """Create a well-structured resume summary."""
-    import re
-    
-    # Extract key information patterns
+    """Format resume summary with structured information"""
     name_match = re.search(r'^([A-Z][a-z]+ [A-Z][a-z]+)', text)
     email_match = re.search(r'([a-zA-Z0-9._%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', text)
     phone_match = re.search(r'(\+?91[-\s]?\d{10}|\d{10})', text)
     
-    # Extract education
-    education_match = re.search(r'(B\.?Tech|Bachelor|Engineering|University|College).*?(\d{4})', text, re.IGNORECASE)
-    
-    # Build structured summary
     structured_summary = []
     
-    # Add contact info if found
     if name_match:
-        structured_summary.append(f"Name: {name_match.group(1)}")
+        structured_summary.append(f"**Name:** {name_match.group(1)}")
     if email_match:
-        structured_summary.append(f"Email: {email_match.group(1)}")
+        structured_summary.append(f"**Email:** {email_match.group(1)}")
     if phone_match:
-        structured_summary.append(f"Phone: {phone_match.group(1)}")
+        structured_summary.append(f"**Phone:** {phone_match.group(1)}")
     
-    # Add the AI-generated summary
-    structured_summary.append(f"\nProfessional Summary: {summary}")
-    
-    # Add education if found
-    if education_match:
-        structured_summary.append(f"Education: {education_match.group(0)}")
+    structured_summary.append(f"\n**Professional Summary:** {summary}")
     
     return "\n".join(structured_summary)
 
-def process_input(input_data, is_pdf=False, question=None):
-    """HIGH-ACCURACY processing with resume/document optimization."""
-    if is_pdf:
-        raw_text = extract_text_from_pdf(input_data)
-        # Apply resume-specific cleaning
-        text = clean_resume_text(raw_text)
-    else:
-        text = input_data
-        # Light cleaning for pasted text too
-        text = clean_resume_text(text)
-
-    # Detect if this is likely a resume/CV
+def process_document(text, question=None):
+    """Process document for summarization and Q&A"""
     is_resume = any(keyword in text.upper() for keyword in 
-                   ['EDUCATION', 'EXPERIENCE', 'SKILLS', 'PROJECTS', 'RESUME', 'CV', 'CONTACT'])
-
-    # Use intelligent chunking for better context preservation
+                   ['EDUCATION', 'EXPERIENCE', 'SKILLS', 'PROJECTS', 'RESUME', 'CV'])
+    
+    if is_resume:
+        text = clean_resume_text(text)
+    
     text_chunks = intelligent_chunking(text, max_size=2000 if is_resume else 1500)
     
-    # Generate high-quality summary with resume optimization
+    # Generate summary
     if len(text_chunks) == 1:
-        # Single chunk - use directly with larger context for resumes
         summary_text = text_chunks[0][:3000 if is_resume else 2500]
         try:
+            summary = summarizer(summary_text, 
+                               max_length=300 if is_resume else 200, 
+                               min_length=150 if is_resume else 80, 
+                               do_sample=False)[0]['summary_text']
             if is_resume:
-                # Resume-optimized summarization
-                summary = summarizer(summary_text, 
-                                   max_length=300,  # Longer for resumes
-                                   min_length=150, 
-                                   do_sample=False)[0]['summary_text']
-                # Apply resume formatting
                 summary = format_resume_summary(text, summary)
-            else:
-                summary = summarizer(summary_text, 
-                                   max_length=200, 
-                                   min_length=80, 
-                                   do_sample=False)[0]['summary_text']
-        except Exception as e:
-            # Fallback summary
+        except:
             sentences = summary_text.split('.')[:8]
             summary = '. '.join(sentences) + '.'
             if is_resume:
                 summary = format_resume_summary(text, summary)
     else:
-        # Multiple chunks - process each carefully
+        # Multi-chunk processing
         chunk_summaries = []
         for chunk in text_chunks[:4 if is_resume else 3]:
             try:
@@ -311,11 +173,9 @@ def process_input(input_data, is_pdf=False, question=None):
                                          do_sample=False)[0]['summary_text']
                 chunk_summaries.append(chunk_summary)
             except:
-                # Fallback for problematic chunks
                 sentences = chunk.split('.')[:6]
                 chunk_summaries.append('. '.join(sentences) + '.')
         
-        # Combine and finalize
         combined = ' '.join(chunk_summaries)
         if len(combined.split()) > 200:
             try:
@@ -328,133 +188,97 @@ def process_input(input_data, is_pdf=False, question=None):
         else:
             summary = combined
             
-        # Format for resume if detected
         if is_resume:
             summary = format_resume_summary(text, summary)
     
-    # Prepare enhanced result
     result = {
-        "Summary": summary,
-        "Original Text": text[:1000] + "..." if len(text) > 1000 else text,
-        "Processing Stats": {
-            "Total Chunks": len(text_chunks),
-            "Text Length": len(text),
-            "Document Type": "Resume/CV" if is_resume else "General Document",
-            "Processing Method": "RESUME-OPTIMIZED AI Pipeline" if is_resume else "HIGH-ACCURACY AI Pipeline"
-        }
+        "summary": summary,
+        "chunks": len(text_chunks),
+        "doc_type": "Resume/CV" if is_resume else "General Document"
     }
-
-    # Enhanced Q&A processing (same as before but with better context)
+    
+    # Handle Q&A if question provided
     if question:
         try:
-            # Find the most relevant context using advanced similarity
-            best_context = find_best_context(text_chunks, question, max_context_length=3000)
-            
-            # Combine summary + best context for maximum accuracy
+            # Find best context
+            best_context = text[:3000]  # Simple approach for Streamlit
             enhanced_context = f"Document Summary: {summary}\n\nDetailed Context: {best_context}"
             
-            # Use advanced Q&A model with larger context
             qa_result = qa_pipeline(question=question, context=enhanced_context)
-            raw_answer = qa_result['answer']
-            confidence_score = qa_result.get('score', 0.0)
-            
-            # Apply answer enhancement techniques
-            enhanced_answer = enhance_answer_quality(raw_answer, question, enhanced_context)
-            
-            # Calculate detailed quality metrics
-            answer_words = len(enhanced_answer.split())
-            question_words = set(question.lower().split())
-            answer_word_set = set(enhanced_answer.lower().split())
-            
-            relevance_score = len(question_words.intersection(answer_word_set)) / max(len(question_words), 1)
-            
-            # Check for technical content
-            tech_indicators = ['method', 'approach', 'algorithm', 'technique', 'process', 
-                             'system', 'analysis', 'result', 'finding', 'conclusion',
-                             'data', 'model', 'framework', 'implementation', 'project', 'experience']
-            has_technical = any(term in enhanced_answer.lower() for term in tech_indicators)
-            
-            # Enhanced confidence calculation
-            final_confidence = (confidence_score + relevance_score) / 2
-            if has_technical:
-                final_confidence = min(final_confidence + 0.15, 1.0)
-            if answer_words >= 15:  # Detailed answers get confidence boost
-                final_confidence = min(final_confidence + 0.1, 1.0)
-            if is_resume:  # Resume-specific boost
-                final_confidence = min(final_confidence + 0.1, 1.0)
-            
-            result.update({
-                "QnA Answer": enhanced_answer,
-                "Confidence Score": round(final_confidence, 2),
-                "Answer Quality": {
-                    "Length": answer_words,
-                    "Is Detailed": answer_words >= 10,
-                    "Has Technical Terms": has_technical,
-                    "Relevance Score": round(relevance_score, 2),
-                    "Context Quality": "Resume-optimized matching" if is_resume else "High-precision semantic matching"
-                },
-                "Processing Method": "Advanced RoBERTa + Resume Context" if is_resume else "Advanced RoBERTa + Enhanced Context",
-                "Context Chunks Used": len([c for c in text_chunks if calculate_semantic_similarity(question, c) > 0.1])
-            })
-                
+            result["answer"] = qa_result['answer']
+            result["confidence"] = round(qa_result.get('score', 0.0), 2)
         except Exception as e:
-            result.update({
-                "QnA Answer": f"Processing error occurred: {str(e)}",
-                "Confidence Score": 0.0
-            })
-
+            result["answer"] = f"Error processing question: {str(e)}"
+            result["confidence"] = 0.0
+    
     return result
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+# Main interface
+col1, col2 = st.columns([2, 1])
 
-@app.route('/process', methods=['POST'])
-def process_document():
-    try:
-        text_input = request.form.get('text_input', '').strip()
-        question = request.form.get('question', '').strip()
-        file = request.files.get('file')
-        
-        if not text_input and not file:
-            return jsonify({'error': 'Please provide text or upload a file'})
-        
-        if file and file.filename != '':
-            if not allowed_file(file.filename):
-                return jsonify({'error': 'Please upload a PDF or TXT file'})
-            
-            filename = secure_filename(file.filename)
-            file_content = file.read()
-            
-            with tempfile.NamedTemporaryFile(mode='wb', suffix='.pdf' if filename.lower().endswith('.pdf') else '.txt', delete=False) as tmp_file:
-                tmp_file.write(file_content)
-                tmp_file_path = tmp_file.name
-            
+with col1:
+    st.subheader("📄 Document Input")
+    
+    # File uploader
+    uploaded_file = st.file_uploader("Upload a PDF file", type=['pdf'], help="Upload a PDF document for analysis")
+    
+    # Text input
+    text_input = st.text_area("Or enter text directly", height=150, 
+                             placeholder="Paste your text here for analysis...")
+    
+    # Question input
+    question_input = st.text_input("❓ Ask a question about the document (optional)", 
+                                  placeholder="What is this document about?")
+
+with col2:
+    st.subheader("🚀 Quick Questions")
+    if st.button("📚 What are the main skills?"):
+        question_input = "What are the main skills mentioned?"
+    if st.button("💼 Work experience?"):
+        question_input = "What work experience is mentioned?"
+    if st.button("🎓 Educational background?"):
+        question_input = "What is the educational background?"
+    if st.button("🔧 Technical projects?"):
+        question_input = "What technical projects are described?"
+
+# Process button
+if st.button("🔄 Process Document", type="primary"):
+    if uploaded_file is not None or text_input.strip():
+        with st.spinner("🤖 AI is processing your document..."):
             try:
-                time.sleep(0.1)
-                
-                if filename.lower().endswith('.pdf'):
-                    result = process_input(tmp_file_path, is_pdf=True, question=question if question else None)
+                # Get text content
+                if uploaded_file is not None:
+                    document_text = extract_text_from_pdf(uploaded_file)
+                    st.success(f"✅ PDF processed successfully! ({len(document_text)} characters)")
                 else:
-                    with open(tmp_file_path, 'r', encoding='utf-8') as f:
-                        text_content = f.read()
-                    result = process_input(text_content, is_pdf=False, question=question if question else None)
-            finally:
-                try:
-                    if os.path.exists(tmp_file_path):
-                        time.sleep(0.1)
-                        os.unlink(tmp_file_path)
-                except:
-                    pass
-        
-        elif text_input:
-            result = process_input(text_input, is_pdf=False, question=question if question else None)
-        
-        return jsonify({'success': True, 'result': result})
-        
-    except Exception as e:
-        return jsonify({'error': f'Error: {str(e)}'})
+                    document_text = text_input.strip()
+                
+                # Process the document
+                result = process_document(document_text, question_input if question_input.strip() else None)
+                
+                # Display results
+                st.subheader("📋 Summary")
+                st.markdown(result["summary"])
+                
+                if "answer" in result:
+                    st.subheader("❓ Q&A Answer")
+                    st.markdown(f"**Answer:** {result['answer']}")
+                    st.markdown(f"**Confidence:** {result['confidence']}")
+                
+                # Stats
+                with st.expander("📊 Processing Statistics"):
+                    st.write(f"**Document Type:** {result['doc_type']}")
+                    st.write(f"**Text Chunks:** {result['chunks']}")
+                    st.write(f"**Text Length:** {len(document_text)} characters")
+                
+            except Exception as e:
+                st.error(f"❌ Error processing document: {str(e)}")
+    else:
+        st.warning("⚠️ Please upload a PDF file or enter some text!")
 
-if __name__ == '__main__':
-    print("Starting server on http://localhost:5000")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+# Footer
+st.markdown("---")
+st.markdown("### 🤖 Powered by Advanced AI Models")
+st.markdown("• **BART-Large-CNN** for high-quality summarization")
+st.markdown("• **RoBERTa-Large-Squad2** for accurate question answering")
+st.markdown("• **Intelligent text chunking** for better processing")
