@@ -27,18 +27,31 @@ def load_models():
     """Load AI models with caching"""
     try:
         with st.spinner("🚀 Loading High-Accuracy AI Models..."):
+            # Try advanced models first
             summarizer = pipeline("summarization", model="facebook/bart-large-cnn", device=-1)
             qa_pipeline = pipeline("question-answering", model="deepset/roberta-large-squad2", device=-1)
         st.success("✅ Advanced AI Models Loaded Successfully!")
         return summarizer, qa_pipeline
     except Exception as e:
-        st.warning(f"⚠️ Using fallback models: {e}")
-        summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
-        qa_pipeline = pipeline("question-answering", model="distilbert-base-cased-distilled-squad")
-        return summarizer, qa_pipeline
+        st.info(f"🔄 Loading optimized models for cloud deployment...")
+        try:
+            # Use lighter models for cloud deployment
+            summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6", device=-1)
+            qa_pipeline = pipeline("question-answering", model="distilbert-base-cased-distilled-squad", device=-1)
+            st.success("✅ Cloud-Optimized AI Models Loaded Successfully!")
+            return summarizer, qa_pipeline
+        except Exception as e2:
+            st.error(f"❌ Error loading models: {e2}")
+            # Return None to handle gracefully
+            return None, None
 
 # Load models
 summarizer, qa_pipeline = load_models()
+
+# Check if models loaded successfully
+if summarizer is None or qa_pipeline is None:
+    st.error("❌ Failed to load AI models. Please try refreshing the page.")
+    st.stop()
 
 def advanced_text_preprocessing(text):
     """Enhanced text preprocessing"""

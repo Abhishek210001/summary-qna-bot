@@ -8,9 +8,10 @@ import os
 
 # Page configuration
 st.set_page_config(
-    page_title="PDF Summarizer + QnA Bot",
+    page_title="🤖 AI PDF Summarizer + QnA Bot",
     page_icon="📄",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 # Title and description
