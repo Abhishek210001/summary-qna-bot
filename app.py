@@ -150,8 +150,106 @@ def format_resume_summary(text, summary):
     
     return "\n".join(structured_summary)
 
+def enhance_summary_with_details(summary, original_text, is_resume):
+    """Enhance summary with additional key details"""
+    enhanced_summary = summary
+    
+    # Extract important numbers, dates, and specific details
+    important_details = []
+    
+    # Find years/dates
+    years = re.findall(r'\b(19|20)\d{2}\b', original_text)
+    if years:
+        important_details.append(f"Timeline: {min(years)} - {max(years)}")
+    
+    # Find percentages and numbers
+    percentages = re.findall(r'\b\d+\.?\d*%\b', original_text)
+    if percentages:
+        important_details.append(f"Key metrics: {', '.join(percentages[:3])}")
+    
+    # Find specific technologies/skills (for resumes)
+    if is_resume:
+        tech_keywords = ['Python', 'Java', 'JavaScript', 'React', 'Node.js', 'SQL', 'Machine Learning', 'AI', 'Data Science']
+        found_tech = [tech for tech in tech_keywords if tech.lower() in original_text.lower()]
+        if found_tech:
+            important_details.append(f"Technologies: {', '.join(found_tech[:5])}")
+    
+    # Add details to summary
+    if important_details:
+        enhanced_summary += f"\n\nKey Details:\n• " + "\n• ".join(important_details)
+    
+    return enhanced_summary
+
+def extract_key_points(text):
+    """Extract key points from text chunk"""
+    key_points = []
+    
+    # Split into sentences and find important ones
+    sentences = [s.strip() for s in text.split('.') if len(s.strip()) > 20]
+    
+    # Look for sentences with important indicators
+    important_indicators = [
+        'achieved', 'developed', 'implemented', 'created', 'designed', 'managed', 
+        'led', 'improved', 'increased', 'reduced', 'built', 'established',
+        'responsible for', 'experience in', 'skilled in', 'expertise in'
+    ]
+    
+    for sentence in sentences[:15]:  # Limit to prevent too many points
+        if any(indicator in sentence.lower() for indicator in important_indicators):
+            # Clean and format the sentence
+            clean_sentence = sentence.strip()
+            if len(clean_sentence) > 30 and len(clean_sentence) < 200:
+                key_points.append(clean_sentence)
+    
+    return key_points[:5]  # Return top 5 key points
+
+def create_comprehensive_fallback_summary(text, is_resume):
+    """Create comprehensive summary when AI summarizer fails"""
+    sentences = [s.strip() for s in text.split('.') if len(s.strip()) > 15]
+    
+    # Take first few sentences as introduction
+    intro_sentences = sentences[:3]
+    intro = '. '.join(intro_sentences) + '.'
+    
+    # Extract key information
+    key_info = []
+    
+    if is_resume:
+        # Look for education
+        education_sentences = [s for s in sentences if any(word in s.lower() for word in ['university', 'college', 'degree', 'education'])]
+        if education_sentences:
+            key_info.append(f"Education: {education_sentences[0]}")
+        
+        # Look for experience
+        experience_sentences = [s for s in sentences if any(word in s.lower() for word in ['experience', 'worked', 'company', 'role'])]
+        if experience_sentences:
+            key_info.append(f"Experience: {experience_sentences[0]}")
+        
+        # Look for skills
+        skills_sentences = [s for s in sentences if any(word in s.lower() for word in ['skills', 'technologies', 'programming', 'software'])]
+        if skills_sentences:
+            key_info.append(f"Skills: {skills_sentences[0]}")
+    else:
+        # For general documents, extract key themes
+        middle_sentences = sentences[len(sentences)//4:len(sentences)*3//4]
+        if middle_sentences:
+            key_info.extend(middle_sentences[:3])
+    
+    # Combine into comprehensive summary
+    comprehensive_summary = intro
+    if key_info:
+        comprehensive_summary += f"\n\nKey Information:\n• " + "\n• ".join(key_info)
+    
+    # Add conclusion if available
+    if len(sentences) > 5:
+        conclusion_sentences = sentences[-2:]
+        conclusion = '. '.join(conclusion_sentences) + '.'
+        comprehensive_summary += f"\n\nConclusion: {conclusion}"
+    
+    return comprehensive_summary
+
 def process_document(text, question=None):
-    """Process document for summarization and Q&A"""
+    """Process document for summarization and Q&A with enhanced comprehensive summaries"""
     is_resume = any(keyword in text.upper() for keyword in 
                    ['EDUCATION', 'EXPERIENCE', 'SKILLS', 'PROJECTS', 'RESUME', 'CV'])
     
@@ -160,46 +258,74 @@ def process_document(text, question=None):
     
     text_chunks = intelligent_chunking(text, max_size=2000 if is_resume else 1500)
     
-    # Generate summary
+    # Generate comprehensive summary
     if len(text_chunks) == 1:
-        summary_text = text_chunks[0][:3000 if is_resume else 2500]
+        # Single chunk - generate detailed summary
+        summary_text = text_chunks[0]
         try:
+            # Generate longer, more detailed summary
             summary = summarizer(summary_text, 
-                               max_length=300 if is_resume else 200, 
-                               min_length=150 if is_resume else 80, 
+                               max_length=500 if is_resume else 400, 
+                               min_length=250 if is_resume else 200, 
                                do_sample=False)[0]['summary_text']
+            
+            # Enhance with key details extraction
+            summary = enhance_summary_with_details(summary, summary_text, is_resume)
+            
             if is_resume:
                 summary = format_resume_summary(text, summary)
         except:
-            sentences = summary_text.split('.')[:8]
-            summary = '. '.join(sentences) + '.'
+            # Fallback: create comprehensive manual summary
+            summary = create_comprehensive_fallback_summary(summary_text, is_resume)
             if is_resume:
                 summary = format_resume_summary(text, summary)
     else:
-        # Multi-chunk processing
+        # Multi-chunk processing - comprehensive approach
         chunk_summaries = []
-        for chunk in text_chunks[:4 if is_resume else 3]:
-            try:
-                chunk_summary = summarizer(chunk[:2000], 
-                                         max_length=200 if is_resume else 150, 
-                                         min_length=80 if is_resume else 50, 
-                                         do_sample=False)[0]['summary_text']
-                chunk_summaries.append(chunk_summary)
-            except:
-                sentences = chunk.split('.')[:6]
-                chunk_summaries.append('. '.join(sentences) + '.')
+        key_points = []
         
-        combined = ' '.join(chunk_summaries)
-        if len(combined.split()) > 200:
+        # Process each chunk with detailed summarization
+        for i, chunk in enumerate(text_chunks):
             try:
-                summary = summarizer(combined, 
-                                   max_length=400 if is_resume else 250, 
-                                   min_length=150 if is_resume else 100, 
-                                   do_sample=False)[0]['summary_text']
+                # Generate detailed summary for each chunk
+                chunk_summary = summarizer(chunk[:2000], 
+                                         max_length=300 if is_resume else 250, 
+                                         min_length=150 if is_resume else 100, 
+                                         do_sample=False)[0]['summary_text']
+                chunk_summaries.append(f"Section {i+1}: {chunk_summary}")
+                
+                # Extract key points from each chunk
+                key_points.extend(extract_key_points(chunk))
+                
             except:
-                summary = combined[:800] + '...'
+                # Fallback for chunk processing
+                sentences = chunk.split('.')[:10]  # More sentences for completeness
+                chunk_summary = '. '.join([s.strip() for s in sentences if len(s.strip()) > 10]) + '.'
+                chunk_summaries.append(f"Section {i+1}: {chunk_summary}")
+        
+        # Combine all summaries into comprehensive final summary
+        combined_summary = '\n\n'.join(chunk_summaries)
+        
+        # Add key points section
+        if key_points:
+            key_points_text = '\n\nKey Points:\n• ' + '\n• '.join(key_points[:8])
+            combined_summary += key_points_text
+        
+        # Final comprehensive summary
+        if len(combined_summary.split()) > 300:
+            try:
+                # Generate final comprehensive summary
+                final_summary = summarizer(combined_summary, 
+                                         max_length=600 if is_resume else 500, 
+                                         min_length=300 if is_resume else 250, 
+                                         do_sample=False)[0]['summary_text']
+                
+                # Combine with section details
+                summary = f"{final_summary}\n\n{combined_summary}"
+            except:
+                summary = combined_summary
         else:
-            summary = combined
+            summary = combined_summary
             
         if is_resume:
             summary = format_resume_summary(text, summary)
