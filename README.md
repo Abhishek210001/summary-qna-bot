@@ -10,15 +10,15 @@
 
 ## 🌟 **Dual Deployment Architecture**
 
-### 🏠 **Local Flask App (Maximum Performance)**
-- **Advanced Text Processing**: Comprehensive document analysis
-- **High Accuracy**: Best-in-class summarization and Q&A
+### 🏠 **Local Flask App (AI-Powered)**
+- **AI Models**: BART-Large-CNN + RoBERTa-Large-Squad2 (with DistilBART/DistilBERT fallbacks)
+- **High Accuracy**: Advanced AI summarization and Q&A
 - **Access**: `http://localhost:5000`
 - **Run**: `python working_flask_app.py`
 
-### ☁️ **Cloud Streamlit App (Global Access)**
-- **Memory-Optimized**: Advanced text processing algorithms
-- **Cloud-Ready**: Works within memory limits
+### ☁️ **Cloud Streamlit App (Text Processing)**
+- **Algorithm-Based**: Advanced text processing without AI models
+- **Memory-Optimized**: Works within cloud memory limits
 - **Global Access**: Deploy to Streamlit Cloud, Railway, Render
 - **Run**: `streamlit run app.py`
 
@@ -59,14 +59,14 @@
 🔍 Matches Found: 12 relevant sentences
 ```
 
-### 🚀 **Enhanced User Experience**
-- **📄 PDF Processing**: Advanced text extraction with multiple methods
-- **📋 Resume Optimization**: Specialized processing for CVs and resumes
-- **🎯 Smart Chunking**: Intelligent text segmentation with context preservation
-- **📱 Mobile Friendly**: Responsive design that works on all devices
-- **📋 Copy to Clipboard**: Easy sharing of results
-- **🔍 File Validation**: Size and type checking for uploads
-- **⚡ Quick Questions**: Pre-built buttons for common queries
+### 🚀 **Actual Features Implemented**
+- **📄 PDF Processing**: Text extraction using PyMuPDF (fitz)
+- **📋 Resume Analysis**: Specialized text cleaning and structured formatting
+- **🎯 Smart Chunking**: Intelligent text segmentation with overlap
+- **📱 Responsive Design**: Modern HTML/CSS/JavaScript interface
+- **📋 Copy to Clipboard**: JavaScript-based result copying
+- **🔍 File Validation**: Client-side file size and type checking
+- **⚡ Quick Questions**: Pre-built question buttons for resumes
 
 ---
 
@@ -86,14 +86,14 @@ cd summary-qna-bot
 
 ### **2. Install Dependencies**
 
-**For Local Flask App (High Performance):**
+**For Local Flask App (AI Models):**
 ```bash
-pip install -r requirements_deploy.txt
+pip install flask transformers torch PyMuPDF werkzeug numpy
 ```
 
-**For Cloud Streamlit App (Memory Optimized):**
+**For Cloud Streamlit App (Text Processing):**
 ```bash
-pip install -r requirements.txt
+pip install streamlit PyMuPDF numpy requests
 ```
 
 ### **3. Run Applications**
@@ -193,23 +193,24 @@ streamlit run app.py
 
 ## 🧠 **AI Models & Technology**
 
-### **Local Flask App (High Accuracy)**
-- **Text Processing**: Advanced algorithms for comprehensive analysis
-- **Smart Summarization**: Intelligent text chunking and analysis
-- **Question Answering**: Context-aware Q&A with confidence scoring
-- **Processing**: Advanced chunking, semantic similarity, answer enhancement
+### **Local Flask App (AI-Powered)**
+- **AI Models**: BART-Large-CNN (facebook/bart-large-cnn) for summarization
+- **AI Models**: RoBERTa-Large-Squad2 (deepset/roberta-large-squad2) for Q&A
+- **Fallbacks**: DistilBART-CNN-12-6 and DistilBERT-base-cased-distilled-squad
+- **Processing**: Transformers pipeline, intelligent chunking, context preservation
 
-### **Cloud Streamlit App (Memory Optimized)**
-- **Text Processing**: Advanced algorithms for comprehensive analysis
-- **Smart Q&A**: Intelligent keyword matching with confidence scoring
-- **Resume Analysis**: Specialized processing for structured documents
-- **Memory Efficient**: Optimized algorithms, works within cloud limits
+### **Cloud Streamlit App (Algorithm-Based)**
+- **Text Analysis**: Regex-based preprocessing and sentence extraction
+- **Keyword Matching**: Intelligent Q&A using word scoring and relevance
+- **Resume Processing**: Specialized text cleaning and structured formatting
+- **Memory Efficient**: No AI models, pure Python text processing
 
-### **Core Technologies**
-- **Frontend**: Streamlit, Flask, HTML/CSS/JavaScript
-- **PDF Processing**: PyMuPDF (fitz) with multiple extraction methods
-- **Text Processing**: Advanced preprocessing, chunking, and analysis
-- **Deployment**: Multi-platform support (Streamlit Cloud, Railway, Render, etc.)
+### **Core Technologies Actually Used**
+- **Frontend**: Streamlit (cloud), Flask + HTML/CSS/JavaScript (local)
+- **PDF Processing**: PyMuPDF (fitz) for text extraction
+- **AI Framework**: Transformers library (local Flask app only)
+- **Text Processing**: Python regex, string manipulation, numpy
+- **Deployment**: Streamlit Cloud, Railway, Render, Heroku support
 
 ---
 
@@ -217,12 +218,12 @@ streamlit run app.py
 
 | Feature | Local Flask App | Cloud Streamlit App |
 |---------|----------------|-------------------|
-| **Processing** | Advanced Text Analysis | Advanced Text Processing |
-| **Accuracy** | Maximum (95%+) | High (85%+) |
-| **Speed** | Fast | Very Fast |
-| **Memory Usage** | Moderate (< 1GB) | Low (< 500MB) |
-| **Deployment** | Local only | Global cloud deployment |
-| **Best For** | Maximum accuracy | Global accessibility |
+| **Technology** | AI Models (BART + RoBERTa) | Algorithm-based processing |
+| **Accuracy** | High (AI-powered) | Good (keyword matching) |
+| **Speed** | Moderate (model loading) | Fast (no models) |
+| **Memory Usage** | High (~2-3GB with models) | Low (~100MB) |
+| **Dependencies** | transformers, torch, flask | streamlit, PyMuPDF only |
+| **Best For** | Maximum AI accuracy | Cloud deployment |
 
 ---
 
@@ -293,11 +294,17 @@ font="sans serif"
 
 **3. Local Flask App Not Starting**
 - ✅ **Solution**: Run `python working_flask_app.py` instead of `python app.py`
-- ✅ **Check**: Ensure all dependencies are installed
+- ✅ **Check**: Install AI dependencies: `pip install transformers torch`
+- ✅ **Note**: First run downloads ~2-3GB of AI models
 
 **4. Streamlit Command Not Found**
 - ✅ **Solution**: Install streamlit: `pip install streamlit`
 - ✅ **Alternative**: Use `python -m streamlit run app.py`
+
+**5. AI Model Loading Errors (Local Flask)**
+- ✅ **Solution**: Ensure stable internet for model downloads
+- ✅ **Fallback**: App automatically uses lighter DistilBART/DistilBERT models
+- ✅ **Space**: Ensure ~5GB free disk space for model cache
 
 ---
 
@@ -319,10 +326,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 **Acknowledgments**
 
-- **Streamlit** for the amazing web app framework
-- **Flask** for the robust web framework
-- **PyMuPDF** for reliable PDF processing capabilities
-- **Open Source Community** for the excellent libraries and tools
+- **Streamlit** for the web app framework
+- **Flask** for the web framework
+- **PyMuPDF (fitz)** for PDF text extraction
+- **Transformers (Hugging Face)** for AI model pipeline (local app)
+- **Facebook AI** for BART-Large-CNN model
+- **deepset** for RoBERTa-Large-Squad2 model
+- **Font Awesome** for icons in the web interface
 
 ---
 
