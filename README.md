@@ -3,7 +3,6 @@
 [![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org/)
 [![Flask](https://img.shields.io/badge/Flask-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
-[![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-FFD21E?style=for-the-badge)](https://huggingface.co/)
 
 > **An intelligent document processing application with dual deployment options: High-performance local Flask app and memory-optimized cloud Streamlit app.**
 
@@ -12,15 +11,15 @@
 ## 🌟 **Dual Deployment Architecture**
 
 ### 🏠 **Local Flask App (Maximum Performance)**
-- **Heavy AI Models**: BART-Large-CNN + RoBERTa-Large-Squad2
-- **Maximum Accuracy**: Best-in-class summarization and Q&A
+- **Advanced Text Processing**: Comprehensive document analysis
+- **High Accuracy**: Best-in-class summarization and Q&A
 - **Access**: `http://localhost:5000`
 - **Run**: `python working_flask_app.py`
 
 ### ☁️ **Cloud Streamlit App (Global Access)**
 - **Memory-Optimized**: Advanced text processing algorithms
 - **Cloud-Ready**: Works within memory limits
-- **Global Access**: Deploy to Streamlit Cloud, Heroku, Railway
+- **Global Access**: Deploy to Streamlit Cloud, Railway, Render
 - **Run**: `streamlit run app.py`
 
 ---
@@ -122,23 +121,17 @@ streamlit run app.py
 4. Deploy using `app.py`
 5. **Memory-optimized version will deploy successfully!**
 
-### **2. Hugging Face Spaces**
-```bash
-# Automated deployment
-python deploy_to_hf.py
-```
-
-### **3. Railway**
+### **2. Railway**
 1. Connect GitHub repository
 2. Use `app_deploy.py` as main file
 3. Railway will auto-detect and deploy
 
-### **4. Render**
+### **3. Render**
 1. Connect GitHub repository  
 2. Use `app_deploy.py` as main file
 3. Set build command: `pip install -r requirements_deploy.txt`
 
-### **5. Heroku**
+### **4. Heroku**
 1. Connect GitHub repository
 2. Uses `Procfile` for configuration
 3. Automatic deployment with `app_deploy.py`
@@ -155,8 +148,6 @@ python deploy_to_hf.py
 │   └── app_cloud_optimized.py    # Backup cloud version
 ├── ⚙️ Deployment Configurations
 │   ├── app_deploy.py             # General cloud deployment
-│   ├── app_spaces.py             # Hugging Face Spaces version
-│   ├── deploy_to_hf.py           # Automated HF deployment
 │   ├── Procfile                  # Heroku/Railway config
 │   ├── runtime.txt               # Python version
 │   └── .streamlit/config.toml    # Streamlit theming
@@ -169,8 +160,7 @@ python deploy_to_hf.py
 │       └── index.html            # Beautiful web interface
 ├── 📚 Documentation
 │   ├── README.md                 # This file
-│   ├── DEPLOYMENT_GUIDE.md       # Detailed deployment guide
-│   └── README_spaces.md          # Hugging Face Spaces guide
+│   └── DEPLOYMENT_GUIDE.md       # Detailed deployment guide
 └── 📓 Original Notebook
     └── summery-and-qna-bot.ipynb # Original Jupyter implementation
 ```
@@ -204,22 +194,22 @@ python deploy_to_hf.py
 ## 🧠 **AI Models & Technology**
 
 ### **Local Flask App (High Accuracy)**
-- **Summarization**: `facebook/bart-large-cnn` (1.2GB)
-- **Question Answering**: `deepset/roberta-large-squad2` (1.3GB)
-- **Semantic Search**: `sentence-transformers/all-MiniLM-L6-v2`
+- **Text Processing**: Advanced algorithms for comprehensive analysis
+- **Smart Summarization**: Intelligent text chunking and analysis
+- **Question Answering**: Context-aware Q&A with confidence scoring
 - **Processing**: Advanced chunking, semantic similarity, answer enhancement
 
 ### **Cloud Streamlit App (Memory Optimized)**
 - **Text Processing**: Advanced algorithms for comprehensive analysis
 - **Smart Q&A**: Intelligent keyword matching with confidence scoring
 - **Resume Analysis**: Specialized processing for structured documents
-- **Memory Efficient**: No heavy AI models, works within cloud limits
+- **Memory Efficient**: Optimized algorithms, works within cloud limits
 
 ### **Core Technologies**
 - **Frontend**: Streamlit, Flask, HTML/CSS/JavaScript
 - **PDF Processing**: PyMuPDF (fitz) with multiple extraction methods
 - **Text Processing**: Advanced preprocessing, chunking, and analysis
-- **Deployment**: Multi-platform support (Streamlit Cloud, Heroku, Railway, etc.)
+- **Deployment**: Multi-platform support (Streamlit Cloud, Railway, Render, etc.)
 
 ---
 
@@ -227,10 +217,10 @@ python deploy_to_hf.py
 
 | Feature | Local Flask App | Cloud Streamlit App |
 |---------|----------------|-------------------|
-| **AI Models** | BART-Large + RoBERTa-Large | Advanced Text Processing |
+| **Processing** | Advanced Text Analysis | Advanced Text Processing |
 | **Accuracy** | Maximum (95%+) | High (85%+) |
-| **Speed** | Fast (after model loading) | Very Fast |
-| **Memory Usage** | High (3GB+) | Low (< 500MB) |
+| **Speed** | Fast | Very Fast |
+| **Memory Usage** | Moderate (< 1GB) | Low (< 500MB) |
 | **Deployment** | Local only | Global cloud deployment |
 | **Best For** | Maximum accuracy | Global accessibility |
 
@@ -295,7 +285,7 @@ font="sans serif"
 
 **1. Memory Issues on Cloud Deployment**
 - ✅ **Solution**: Use `app.py` (memory-optimized version)
-- ❌ **Avoid**: Using heavy AI model versions on free cloud tiers
+- ❌ **Avoid**: Using resource-intensive versions on free cloud tiers
 
 **2. PDF Processing Errors**
 - ✅ **Solution**: Ensure PDF is text-based (not scanned images)
@@ -329,10 +319,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 **Acknowledgments**
 
-- **Hugging Face** for providing excellent AI models and transformers library
 - **Streamlit** for the amazing web app framework
 - **Flask** for the robust web framework
 - **PyMuPDF** for reliable PDF processing capabilities
+- **Open Source Community** for the excellent libraries and tools
 
 ---
 
